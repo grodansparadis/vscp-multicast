@@ -1,7 +1,20 @@
 project(sender)
 
 # Create the executable
-add_executable(${PROJECT_NAME} sender.c)
+add_executable(${PROJECT_NAME} sender.c
+                      ../third_party/vscp-firmware/common/vscp-firmware-helper.c
+                      ../third_party/vscp-firmware/common/vscp-aes.c
+                      ../third_party/vscp-firmware/common/crc.c)
+
+include_directories(
+  .
+  ..
+  ../third_party/vscp-firmware/common/
+)
+
+target_link_libraries(${PROJECT_NAME}
+    m
+)
 
 # Link the static library from subproject1 using its alias sub::lib1
 # Link the header only library from subproject2 using its alias sub::lib2
