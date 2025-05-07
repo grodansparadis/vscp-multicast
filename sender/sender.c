@@ -3,13 +3,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <arpa/inet.h>
 #include <unistd.h>
+#endif
 #include <stdbool.h>
 #include <getopt.h>
 #include <vscp.h>
 #include <vscp-firmware-helper.h>
 #include <crc.h>
+
+#pragma comment(lib, "Ws2_32.lib")
 
 #define MULTICAST_GROUP "224.0.23.158" // Multicast group address (VSCP)
 #define MULTICAST_PORT  "9598"         // Multicast port
@@ -20,7 +27,12 @@ main(int argc, char *argv[])
   int rv;
   bool bVerbose = false; // True if verbose information should be printed
   bool bEncrypt = false; // True if frame should be encrypted
+#ifdef WIN32
+  WSADATA wsaData;
+  SOCKET sock;
+#else
   int sock;
+#endif
   struct sockaddr_in multicast_addr;
   char *eventstr = "0,20,3,,,,0:1:2:3:4:5:6:7:8:9:10:11:12:13:14:15,0,1,35";
   // int eventstr_len = strlen(eventstr);
@@ -31,6 +43,14 @@ main(int argc, char *argv[])
 
   // Set default key (obviously not safe and should not be used in production)
   vscp_fwhlp_hex2bin(key, 32, VSCP_DEFAULT_KEY16);
+
+#ifdef WIN32
+  // Initialize Winsock
+  if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+    fprintf(stderr, "WSAStartup failed\n");
+    return EXIT_FAILURE;
+  }
+#endif
 
   // Define long options
   static struct option long_options[] = { { "port", required_argument, 0, 'p' },
@@ -193,12 +213,22 @@ main(int argc, char *argv[])
       }
       printf("\nNew length: %d\n", buflen);
     }
-
   }
 
   // Create a UDP socket
   if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
     perror("Socket creation failed");
+#ifdef WIN32
+    WSACleanup();
+#endif    
+    exit(EXIT_FAILURE);
+  }
+
+  // Allow broadcast (for UDP)
+  int broadcastPermission = 1;
+  if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcastPermission, sizeof(broadcastPermission)) < 0) {
+    perror("setsockopt failed");
+    close(sock);
     exit(EXIT_FAILURE);
   }
 
@@ -211,7 +241,13 @@ main(int argc, char *argv[])
   // Send the multicast message
   if (sendto(sock, buf, buflen, 0, (struct sockaddr *) &multicast_addr, sizeof(multicast_addr)) < 0) {
     perror("Sendto failed");
+#ifdef WIN32
+    closesocket(sock);
+    WSACleanup();
+#else
     close(sock);
+#endif    
+    
     exit(EXIT_FAILURE);
   }
 
@@ -220,6 +256,11 @@ main(int argc, char *argv[])
   }
 
   // Close the socket
+#ifdef WIN32
+  closesocket(sock);
+  WSACleanup();
+#else  
   close(sock);
+#endif
   return 0;
 }

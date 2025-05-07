@@ -192,7 +192,7 @@ main(int argc, char *argv[])
       printf("Type: %d\n", ex.vscp_type);
       printf("Size: %d\n", ex.sizeData);
       for (int i = 0; i < ex.sizeData; i++) {
-        printf("%02x:", ex.data[i]);
+        printf("%02x ", ex.data[i]);
       }
       printf("\n");
       printf("----------------------------------------------------\n");
