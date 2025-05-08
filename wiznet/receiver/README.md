@@ -10,6 +10,13 @@ Info about VSCP over multicast is available in the [VSCP specification](https://
 
 Easiest way to build this eaxmple is to use Visaul Studio Code with the pico extension installed. Open the folder, compile and run.
 
+Turn on user LED with
+
+./sender -v  -e0,30,5,0,,0,0:1:2:3:4:5:6:7:8:9:10:11:12:13:14:15,0,1,35
+
+Turn off user LED with
+
+./sender -v  -e0,30,6,0,,0,0:1:2:3:4:5:6:7:8:9:10:11:12:13:14:15,0,1,35
 
 ## Reference
   * [Application Note UDP_multicast_receiver Example](https://docs.wiznet.io/img/application_notes/PICO-C/UDP_multicast_receiver_EXAMPLE_AN_V100.pdf)

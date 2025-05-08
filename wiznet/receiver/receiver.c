@@ -9,6 +9,8 @@
 #include "socket.h"
 
 #include <vscp.h>
+#include <vscp-class.h>
+#include <vscp-type.h>
 #include <vscp-firmware-helper.h>
 #include <crc.h>
 
@@ -16,7 +18,7 @@
 #define _MULTICAST_DEBUG_
 
 // Multicast receive buffer
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 2048
 
 /*!
   Default VSCP AES-128 key for VSCP Server - !!!! should only be used on test systems !!!!
@@ -65,8 +67,51 @@ static uint8_t multicast_ip[4] = { 224, 0, 23, 158 }; // multicast ip address
 static uint16_t multicast_port = 9598;                // multicast port
 static uint8_t key[64]         = { 0 };               // Encryption key
 
+///////////////////////////////////////////////////////////////////////////////
+// set_clock_khz
+//
+
 static void
-set_clock_khz(void);
+set_clock_khz(void)
+{
+  // set a system clock frequency in khz
+  set_sys_clock_khz(PLL_SYS_KHZ, true);
+
+  // configure the specified clock
+  clock_configure(clk_peri,
+                  0,                                                // No glitchless mux
+                  CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, // System PLL on AUX mux
+                  PLL_SYS_KHZ * 1000,                               // Input frequency
+                  PLL_SYS_KHZ * 1000                                // Output (must be same as no divider)
+  );
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// pico_led_init
+//
+// Perform initialisation
+//
+
+int
+pico_led_init(void)
+{
+  gpio_init(19);
+  gpio_set_dir(19, GPIO_OUT);
+  return PICO_OK;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// pico_set_led
+//
+// Turn the led on or off
+//
+
+void
+pico_set_led(bool led_on)
+{
+  // Just set the GPIO on or off
+  gpio_put(19, led_on);
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // mcast_recv
@@ -79,13 +124,15 @@ mcast_recv(uint8_t sn, uint8_t *buf, uint8_t *multicast_ip, uint16_t multicast_p
   uint16_t buflen, port = 3000;
   uint8_t destip[4];
   uint16_t destport;
+  uint8_t reg;
 #if 1
   // 20231019 taylor
   uint8_t addr_len;
 #endif
 
-  switch (getSn_SR(sn)) {
+  switch ((reg = getSn_SR(sn))) {
 
+    //------------------------------------------------------
     case SOCK_UDP:
       if ((buflen = getSn_RX_RSR(sn)) > 0) {
         if (buflen > BUFFER_SIZE) {
@@ -186,12 +233,49 @@ mcast_recv(uint8_t sn, uint8_t *buf, uint8_t *multicast_ip, uint16_t multicast_p
         printf("Minute: %d\n", ex.minute);
         printf("Second: %d\n", ex.second);
         printf("----------------------------------------------------\n");
-      }
+
+        if ((ex.vscp_class == VSCP_CLASS1_CONTROL) && (ex.vscp_type == VSCP_TYPE_CONTROL_TURNON)) {
+
+          printf("%d:Turn ON\n", sn);
+          pico_set_led(true); // Turn on LED
+
+          // Send confirmation
+          vscpEventEx reply;
+          memset(&reply, 0, sizeof(reply));
+          reply.head       = 0x00;
+          reply.vscp_class = VSCP_CLASS1_INFORMATION;
+          reply.vscp_type  = VSCP_TYPE_INFORMATION_ON;
+          reply.sizeData   = 3;
+          reply.data[0]    = 0x00; // index
+          reply.data[1]    = 0x01; // zone
+          reply.data[2]    = 0x23; // subzone
+
+          rv = sendto(sn, buf, buflen, destip, (uint16_t *) &destport);
+          printf("-------------------------> Sendto: rv=%d",rv);
+        }
+        else if ((ex.vscp_class == VSCP_CLASS1_CONTROL) && (ex.vscp_type == VSCP_TYPE_CONTROL_TURNOFF)) {
+
+          printf("%d:Turn OFF\n", sn);
+          pico_set_led(false); // Turn off LED
+
+          // Send confirmation
+          vscpEventEx reply;
+          memset(&reply, 0, sizeof(reply));
+          reply.head       = 0x00;
+          reply.vscp_class = VSCP_CLASS1_INFORMATION;
+          reply.vscp_type  = VSCP_TYPE_INFORMATION_OFF;
+          reply.sizeData   = 3;
+          reply.data[0]    = 0x00; // index
+          reply.data[1]    = 0x01; // zone
+          reply.data[2]    = 0x23; // subzone
+        }
+      } // Datagram
       break;
 
+    //------------------------------------------------------  
     case SOCK_CLOSED:
 #ifdef _MULTICAST_DEBUG_
-      printf("%d:Multicast Recv start\r\n", sn);
+      printf("%d:Multicast Recv start\n", sn);
 #endif
       setSn_DIPR(sn, multicast_ip);
       setSn_DPORT(sn, multicast_port);
@@ -199,18 +283,20 @@ mcast_recv(uint8_t sn, uint8_t *buf, uint8_t *multicast_ip, uint16_t multicast_p
         return rv;
       }
 #ifdef _MULTICAST_DEBUG_
-      printf("%d:Opened, UDP Multicast Socket\r\n", sn);
-      printf("%d:Multicast Group IP - %d.%d.%d.%d\r\n",
+      printf("%d:Opened, UDP Multicast Socket\n", sn);
+      printf("%d:Multicast Group IP - %d.%d.%d.%d\n",
              sn,
              multicast_ip[0],
              multicast_ip[1],
              multicast_ip[2],
              multicast_ip[3]);
-      printf("%d:Multicast Group Port - %d\r\n", sn, multicast_port);
+      printf("%d:Multicast Group Port - %d\n", sn, multicast_port);
 #endif
       break;
 
+    //------------------------------------------------------  
     default:
+      printf("Default: %d\n", reg);
       break;
   }
   return VSCP_ERROR_SUCCESS;
@@ -243,23 +329,11 @@ main()
 
   print_network_information(g_net_info); // Read back the configuration information and print it
 
+  pico_led_init(); // Initialize the LED
+  pico_set_led(false);
+
   while (true) {
     // Multicast receive test
     mcast_recv(SOCKET_ID, ethernet_buf, multicast_ip, multicast_port);
   }
-}
-
-static void
-set_clock_khz(void)
-{
-  // set a system clock frequency in khz
-  set_sys_clock_khz(PLL_SYS_KHZ, true);
-
-  // configure the specified clock
-  clock_configure(clk_peri,
-                  0,                                                // No glitchless mux
-                  CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, // System PLL on AUX mux
-                  PLL_SYS_KHZ * 1000,                               // Input frequency
-                  PLL_SYS_KHZ * 1000                                // Output (must be same as no divider)
-  );
 }
