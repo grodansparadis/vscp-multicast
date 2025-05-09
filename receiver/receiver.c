@@ -30,12 +30,9 @@ main(int argc, char *argv[])
 
   // Define long options
   static struct option long_options[] = {
-    { "port", required_argument, 0, 'p' },    
-    { "address", required_argument, 0, 'a' },
-    { "decrypt", optional_argument, 0, 'x' }, 
-    { "verbose", no_argument, 0, 'v' },
-    { "help", no_argument, 0, 'h' },          
-    { 0, 0, 0, 0 }
+    { "port", required_argument, 0, 'p' },    { "address", required_argument, 0, 'a' },
+    { "decrypt", optional_argument, 0, 'x' }, { "verbose", no_argument, 0, 'v' },
+    { "help", no_argument, 0, 'h' },          { 0, 0, 0, 0 }
   };
 
   // Set default key (obviously not safe and should not be used in production)
@@ -152,7 +149,7 @@ main(int argc, char *argv[])
     }
 
     // If encrypted frame decrypt it
-    if (buf[0] & 0x0F) {
+    if (buf[0] & 0x0F) {      
 
       if (bVerbose) {
         printf("Encrypted frame detected. Type: %d\n", buf[0] & 0x0F);
