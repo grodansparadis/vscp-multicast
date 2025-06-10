@@ -37,7 +37,7 @@ main(int argc, char *argv[])
   char *eventstr = "0,20,3,,,,0:1:2:3:4:5:6:7:8:9:10:11:12:13:14:15,0,1,35";
   // int eventstr_len = strlen(eventstr);
   char *port          = MULTICAST_PORT;         // Default port
-  char *address       = MULTICAST_GROUP;        // Default address
+  char *group         = MULTICAST_GROUP;        // Default group
   uint8_t typeEncrypt = VSCP_ENCRYPTION_AES128; // Encryption type (default is AES-128)
   uint8_t key[64]     = { 0 };                  // Encryption key
 
@@ -53,26 +53,26 @@ main(int argc, char *argv[])
 #endif
 
   // Define long options
-  static struct option long_options[] = { { "port", required_argument, 0, 'p' },
-                                          { "address", required_argument, 0, 'a' },
-                                          { "event", required_argument, 0, 'e' },
-                                          { "encrypt", optional_argument, 0, 'x' },
-                                          { "verbose", no_argument, 0, 'v' },
-                                          { "help", no_argument, 0, 'h' },
-                                          { 0, 0, 0, 0 } };
+  static struct option long_options[] = {
+    { "port", required_argument, 0, 'p' },    { "group", required_argument, 0, 'g' },
+    { "address", required_argument, 0, 'a' }, { "event", required_argument, 0, 'e' },
+    { "encrypt", optional_argument, 0, 'x' }, { "verbose", no_argument, 0, 'v' },
+    { "help", no_argument, 0, 'h' },          { 0, 0, 0, 0 }
+  };
 
   int opt;
   int option_index = 0;
 
-  while ((opt = getopt_long(argc, argv, "p:a:e:x::hv", long_options, &option_index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "p:g:a:e:x::hv", long_options, &option_index)) != -1) {
 
     switch (opt) {
       case 'p': // Port
         port = optarg;
         break;
 
+      case 'g': // Group
       case 'a': // Address
-        address = optarg;
+        group = optarg;
         break;
 
       case 'e': // Event string
@@ -130,8 +130,20 @@ main(int argc, char *argv[])
 
       case 'h': // Help
       case '?':
-        fprintf(stderr, "Usage: %s [--port port] [--address address] [--event event] [--encrypt key]\n", argv[0]);
+        fprintf(stderr, "Usage: %s [--port port] [--group group] [--event event] [--encrypt key]\n", argv[0]);
         exit(EXIT_FAILURE);
+    }
+  }
+
+  // printf("Non option arg count = %d\n", argc - optind);
+  // for (int i = optind; i < argc; i++) {
+  //   printf("Non-option arg %d: %s\n", i - optind + 1, argv[i]);
+  // }
+
+  if (1 == (argc - optind)) {
+    eventstr = argv[optind];
+    if (bVerbose) {
+      printf("Using event string from command line: %s\n", eventstr);
     }
   }
 
@@ -220,7 +232,7 @@ main(int argc, char *argv[])
     perror("Socket creation failed");
 #ifdef WIN32
     WSACleanup();
-#endif    
+#endif
     exit(EXIT_FAILURE);
   }
 
@@ -232,10 +244,10 @@ main(int argc, char *argv[])
     exit(EXIT_FAILURE);
   }
 
-  // Set up the multicast address
+  // Set up the multicast group
   memset(&multicast_addr, 0, sizeof(multicast_addr));
   multicast_addr.sin_family      = AF_INET;
-  multicast_addr.sin_addr.s_addr = inet_addr(address);
+  multicast_addr.sin_addr.s_addr = inet_addr(group);
   multicast_addr.sin_port        = htons(atoi(port));
 
   // Send the multicast message
@@ -246,8 +258,8 @@ main(int argc, char *argv[])
     WSACleanup();
 #else
     close(sock);
-#endif    
-    
+#endif
+
     exit(EXIT_FAILURE);
   }
 
@@ -259,7 +271,7 @@ main(int argc, char *argv[])
 #ifdef WIN32
   closesocket(sock);
   WSACleanup();
-#else  
+#else
   close(sock);
 #endif
   return 0;

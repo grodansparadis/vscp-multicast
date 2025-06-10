@@ -25,15 +25,17 @@ main(int argc, char *argv[])
   struct ip_mreq multicast_request;
   uint8_t buf[BUFFER_SIZE];
   char *port      = MULTICAST_PORT;  // Default port
-  char *address   = MULTICAST_GROUP; // Default address
+  char *group     = MULTICAST_GROUP; // Default group
   uint8_t key[64] = { 0 };           // Encryption key
 
   // Define long options
-  static struct option long_options[] = {
-    { "port", required_argument, 0, 'p' },    { "address", required_argument, 0, 'a' },
-    { "decrypt", optional_argument, 0, 'x' }, { "verbose", no_argument, 0, 'v' },
-    { "help", no_argument, 0, 'h' },          { 0, 0, 0, 0 }
-  };
+  static struct option long_options[] = { { "port", required_argument, 0, 'p' },
+                                          { "group", required_argument, 0, 'g' },
+                                          { "address", required_argument, 0, 'a' },
+                                          { "decrypt", optional_argument, 0, 'x' },
+                                          { "verbose", no_argument, 0, 'v' },
+                                          { "help", no_argument, 0, 'h' },
+                                          { 0, 0, 0, 0 } };
 
   // Set default key (obviously not safe and should not be used in production)
   vscp_fwhlp_hex2bin(key, 32, VSCP_DEFAULT_KEY16);
@@ -41,14 +43,15 @@ main(int argc, char *argv[])
   int opt;
   int option_index = 0;
 
-  while ((opt = getopt_long(argc, argv, "p:a:hv", long_options, &option_index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "p:g:a:hv", long_options, &option_index)) != -1) {
     switch (opt) {
       case 'p': // Port
         port = optarg;
         break;
 
+      case 'g': // Group
       case 'a': // Address
-        address = optarg;
+        group = optarg;
         break;
 
       case 'x': { // Encryption key
@@ -87,10 +90,17 @@ main(int argc, char *argv[])
 
       case 'h': // Help
       case '?':
-        fprintf(stderr, "Usage: %s [--port port] [--address address] [--event event] [--encrypt key]\n", argv[0]);
+        fprintf(stderr,
+                "Usage: %s [--port port] [--group group] [--event event] [--encrypt key] [--verbose]\n",
+                argv[0]);
         exit(EXIT_FAILURE);
     }
   }
+
+  // printf("Non option arg count = %d\n", argc - optind);
+  // for (int i = optind; i < argc; i++) {
+  //   printf("Non-option arg %d: %s\n", i - optind + 1, argv[i]);
+  // }
 
   crcInit();
 
@@ -108,6 +118,22 @@ main(int argc, char *argv[])
     exit(EXIT_FAILURE);
   }
 
+  // Set TTL (time to live)
+  unsigned char ttl = 1;
+  if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) < 0) {
+    perror("setsockopt (IP_MULTICAST_TTL)");
+    close(sock);
+    return VSCP_ERROR_PARAMETER;
+  }
+
+  // Allow broadcast (for UDP)
+  int broadcastPermission = 1; // 0 = disable, 1 = enable
+  if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcastPermission, sizeof(broadcastPermission)) < 0) {
+    perror("setsockopt failed");
+    close(sock);
+    return VSCP_ERROR_PARAMETER;
+  }
+
   // Bind the socket to the multicast port
   memset(&local_addr, 0, sizeof(local_addr));
   local_addr.sin_family      = AF_INET;
@@ -121,7 +147,7 @@ main(int argc, char *argv[])
   }
 
   // Join the multicast group
-  multicast_request.imr_multiaddr.s_addr = inet_addr(address);
+  multicast_request.imr_multiaddr.s_addr = inet_addr(group);
   multicast_request.imr_interface.s_addr = htonl(INADDR_ANY);
 
   if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &multicast_request, sizeof(multicast_request)) < 0) {
@@ -149,7 +175,7 @@ main(int argc, char *argv[])
     }
 
     // If encrypted frame decrypt it
-    if (buf[0] & 0x0F) {      
+    if (buf[0] & 0x0F) {
 
       if (bVerbose) {
         printf("Encrypted frame detected. Type: %d\n", buf[0] & 0x0F);

@@ -31,3 +31,19 @@ sender -v --address="224.0.23.158" --port="9598" --event="0,20,3,0,,0,0:1:2:3:4:
   If the key is 128 bits (16-bytes), AES-192 if the key is 192 bits long (24 bytes) 
   or AES-256 if the key is 256 bits (32 bytes) long. The key should be given as a 
   hexadecimal string. 
+
+## Tools
+  * [tcpdump](https://www.tcpdump.org/) - A powerful command-line packet analyzer.
+  * [mtools](https://github.com/UltraMessaging/mtools)
+
+Monitor multicast traffic on port 9598 
+
+  ```bash
+  sudo tcpdump  -s0 -vv host 224.0.23.158
+  ```
+
+Listening for multicast events on port 9598:
+
+```bash
+  mdump 224.0.23.158 9598
+``` 

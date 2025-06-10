@@ -31,3 +31,9 @@ cd build
 cmake ..
 cmake --build . --config Release
 ```
+
+## Tools
+  * tcpdump -n udp port 9598
+  * tcpdump -i eth0 -s0 -vv host 224.0.23.158
+  * https://github.com/UltraMessaging/mtools
+  * 
