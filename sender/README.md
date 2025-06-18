@@ -38,12 +38,12 @@ sender -v --address="224.0.23.158" --port="9598" --event="0,20,3,0,,0,0:1:2:3:4:
 
 Monitor multicast traffic on port 9598 
 
-  ```bash
+```bash
   sudo tcpdump  -s0 -vv host 224.0.23.158
-  ```
+```
 
 Listening for multicast events on port 9598:
 
 ```bash
   mdump 224.0.23.158 9598
-``` 
+```

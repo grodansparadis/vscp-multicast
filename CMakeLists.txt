@@ -4,7 +4,7 @@ project(vscp-multicast)
 
 # Add sub directories
 add_subdirectory(sender)
-add_subdirectory(receiver)
+add_subdirectory(listner)
 
 include_directories(
   .
